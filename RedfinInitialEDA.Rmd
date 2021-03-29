@@ -1,0 +1,142 @@
+---
+title: "Redfin Data Initial Exploratory Data Analysis (EDA)"
+author: "Conrad Ibanez"
+date: "February 2, 2019"
+output:
+  pdf_document: 
+    latex_engine : xelatex
+  word_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+
+####a. Exploratory Graphs and Tables
+
+```{r}
+
+# Install the ggplot2 package if not already installed
+#install.packages("ggplot2")
+#install.packages("pastecs")
+#install.packages(c("rmarkdown","shiny","knit"))
+#install.packages(c("Rcpp", "readr"))
+#install.packages("Hmisc", repos = "http://cran.us.r-project.org")
+#install.packages("ggm",repos = "http://cran.us.r-project.org")
+#install.packages("polycor", repos = "http://cran.us.r-project.org")
+#install.packages("readxl", repos = "http://cran.us.r-project.org")
+#install.packages("QuantPsyc", repos = "http://cran.us.r-project.org")
+#install.packages("car", repos = "http://cran.us.r-project.org")
+# Load the packages
+library(ggplot2)
+library(pastecs)
+library(readxl)
+library(boot)
+library(ggm)
+library(Hmisc)
+library(polycor)
+library(data.table)
+library(QuantPsyc)
+library(car)
+library(readr)
+library(plyr)
+library(dplyr)
+library(lubridate)
+
+#Set working directory
+working_dir = getwd()
+setwd("./downloads")
+
+#Import the data
+redfin <- read.csv("redfinGA.csv")
+str(redfin)
+nrow(redfin)
+ncol(redfin)
+
+mean(redfin$Homes.Sold)
+mean(redfin$Inventory)
+mean(redfin$New.Listings)
+
+#df[!is.na(df$age) | !is.na(df$DOB),]
+
+redfinClean <- redfin[!is.na(redfin$Homes.Sold) & !is.na(redfin$Inventory) & !is.na(redfin$New.Listings),]
+
+#Some Data Cleaning Required
+#Convert Period.Begin and Period.End to useable date format
+redfinClean$Period.Begin <- mdy(redfinClean$Period.Begin)
+redfinClean$Period.End <- mdy(redfinClean$Period.End)
+
+#Remove dollar sign and K from Median.Sale.Price
+redfinClean$Median.Sale.Price = as.numeric(gsub("[\\$K]", "", redfinClean$Median.Sale.Price))
+
+
+ggplot(redfinClean, aes(Median.Sale.Price, Inventory)) + geom_point() + labs(x = "Inventory", y = "Median.Sale.Price") + labs(title="Median Sale Price vs Inventory")
+
+ggplot(redfinClean, aes(Median.Sale.Price, Homes.Sold)) + geom_point() + labs(x = "Homes.Sold", y = "Median.Sale.Price") + labs(title="Median Sale Price vs Homes Sold")
+
+ggplot(redfinClean, aes(Median.Sale.Price, Median.List.Price)) + geom_point() + labs(x = "Median.List.Price", y = "Median.Sale.Price") + labs(title="Median Sale Price vs Median List Price")
+
+```
+
+
+####
+```{r}
+
+class(redfinClean)
+
+groupPeriodRegion <- redfinClean %>% group_by (Period.Begin, Region)
+
+zip30097Data <- redfinClean %>% filter_("Region == 'Zip Code: 30097'")
+#View(zip30097Data)
+#View(groupPeriodRegion)
+
+
+ggplot(zip30097Data, aes(x=Period.Begin)) + 
+  geom_line(aes(y=Inventory)) + 
+  labs(title="Time Series Chart", 
+       subtitle="Inventory for 30097", 
+       y="Number of Houses")
+
+ggplot(zip30097Data, aes(x=Period.Begin)) + 
+  geom_line(aes(y=Homes.Sold)) +
+  labs(title="Time Series Chart", 
+       subtitle="Homes Sold 30097", 
+       y="Number of Houses")
+
+ggplot(zip30097Data, aes(x=Period.Begin)) + 
+  geom_line(aes(y=New.Listings)) +
+  labs(title="Time Series Chart", 
+       subtitle="New Listings 30097", 
+       y="Number of Houses")
+
+ggplot(zip30097Data, aes(x=Period.Begin)) + 
+  geom_line(aes(y=pending_sales)) +
+  labs(title="Time Series Chart", 
+       subtitle="Pending Sales 30097", 
+       y="Number of Houses")
+
+
+ggplot(zip30097Data, aes(x=Period.Begin)) + 
+  geom_line(aes(y=Median.List.Price)) +
+  labs(title="Time Series Chart", 
+       subtitle="Median List Price 30097", 
+       y="Price of Houses")
+
+ggplot(zip30097Data, aes(x=Period.Begin)) + 
+  geom_line(aes(y=Median.Sale.Price)) +
+  labs(title="Time Series Chart", 
+       subtitle="Median Sale Price 30097", 
+       y="Price of Houses")
+
+
+#View(redfin)
+
+```
+
+
+## References
+Field, A. et. al. Discovering Statistics Using R. 2012
+

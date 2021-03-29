@@ -1,0 +1,310 @@
+---
+title: "Factors Influencing Housing Prices"
+author: "Conrad Ibanez"
+date: "March 2, 2019"
+output:
+  pdf_document: 
+    latex_engine : xelatex
+  html_document:
+    df_print: paged
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+options(tinytex.verbose = TRUE)
+```
+***
+
+####Project Objective
+
+Problem Statement:  Selling a house is not likely a familiar process or a common occurrence for many people.  However when it does happen, when is the best time to sell?  What factors may have an influence for sellers to get top dollar for the homes they are selling?  Home ownership is probably one of the biggest investments for many people, so it is important to maximize the price if an owner does decide to sell.
+
+We attempt to answer the following questions:
+
+1.	What factors influence the best time to sell?
+2.	Which time of the year yields the highest prices for homes?
+3.	Is there a relationship between inventory level and the prices of homes?
+4.	Is there a specific time such as a particular month where inventory levels are the highest?
+5.	To get top-dollar, does that mean a homeowner may also need to wait longer to sell?
+
+In this project, housing sales data from Redfin from 2011 to 2018 is analyzed. A subset of the data is selected with a focus on the city of Duluth, GA, with a zip code of 30097.  We define the Area 30097 to also include the bordering zip codes of 30096, 30092, 30024, 30022, 30005, and 30043.
+
+```{r}
+
+# Install the ggplot2 package if not already installed
+#install.packages("ggplot2")
+#install.packages("pastecs")
+#install.packages(c("rmarkdown","shiny","knit"))
+#install.packages(c("Rcpp", "readr"))
+#install.packages("Hmisc", repos = "http://cran.us.r-project.org")
+#install.packages("ggm",repos = "http://cran.us.r-project.org")
+#install.packages("polycor", repos = "http://cran.us.r-project.org")
+#install.packages("readxl", repos = "http://cran.us.r-project.org")
+#install.packages("QuantPsyc", repos = "http://cran.us.r-project.org")
+#install.packages("car", repos = "http://cran.us.r-project.org")
+#install.packages("knitr", repos = "http://cran.us.r-project.org")
+
+# Load the packages
+library(ggplot2)
+library(pastecs)
+library(readxl)
+library(boot)
+library(ggm)
+library(Hmisc)
+library(polycor)
+library(data.table)
+library(QuantPsyc)
+library(car)
+library(readr)
+library(plyr)
+library(dplyr)
+library(lubridate)
+library(knitr)
+
+#Set working directory
+working_dir = getwd()
+
+setwd("./downloads")
+
+#Import the data
+redfin <- read.csv("redfinGA.csv")
+#str(redfin)
+#nrow(redfin)
+#ncol(redfin)
+
+#df[!is.na(df$age) | !is.na(df$DOB),]
+
+redfinClean <- redfin[!is.na(redfin$Homes.Sold) & !is.na(redfin$Inventory) & !is.na(redfin$New.Listings),]
+
+#Some Data Cleaning Required
+#Convert Period.Begin and Period.End to useable date format
+redfinClean$Period.Begin <- mdy(redfinClean$Period.Begin)
+redfinClean$Period.End <- mdy(redfinClean$Period.End)
+redfinClean$BeginMonthNum <- format(redfinClean$Period.Begin,"%m")
+redfinClean$BeginMonth  <- months(as.Date(redfinClean$Period.Begin), abbreviate=TRUE) # Month's abbr
+redfinClean$BeginYear <- format(redfinClean$Period.Begin,"%Y")
+
+#Remove dollar sign and K from Median.Sale.Price and multiply by 1000 since the number was in the format value k
+redfinClean$Median.Sale.Price = as.numeric(gsub("[\\$K]", "", redfinClean$Median.Sale.Price))
+redfinClean$Median.Sale.Price = redfinClean$Median.Sale.Price * 1000
+
+class(redfinClean)
+
+groupPeriodRegion <- redfinClean %>% group_by (Period.Begin, Region)
+
+#Get the subset of data for zip 30097 and neighboring zip codes
+area30097Data <- redfinClean %>% filter_("Region == 'Zip Code: 30097' | Region == 'Zip Code: 30096' | Region == 'Zip Code: 30092' | Region == 'Zip Code: 30024' | Region == 'Zip Code: 30022' | Region == 'Zip Code: 30005' | Region == 'Zip Code: 30043'")
+
+#View(area30097Data)
+#View(groupPeriodRegion)
+
+str(area30097Data)
+
+```
+
+***
+
+####Linear Regression Line on Scatterplots of Median Sale Price and Other Variables
+
+There is a negative relationship between Median Sale Price with most other variables such as Inventory, Homes Sold, New Listings, and Pending Sales.  That is when these variables increase, Median Sale Price decreases.  However, there is a strong positive relationship between Median Sale Price and Median List Price.  This makes sense in that as Median List Price increases, then Median Sale Price also increases.
+
+```{r}
+
+
+#Scatterplots of Data 
+ggplot(area30097Data, aes(Inventory, Median.Sale.Price)) + geom_point() + labs(x = "Inventory", y = "Area 30097 Median Sale Price") + labs(title="Area 30097 Median Sale Price vs Inventory") + geom_smooth(method = "lm", se = FALSE)
+
+#cov(area30097Data$Inventory, area30097Data$Median.Sale.Price, use="pairwise.complete.obs")
+
+ggplot(area30097Data, aes(Homes.Sold, Median.Sale.Price)) + geom_point() + labs(x = "Homes Sold", y = "Area 30097 Median Sale Price") + labs(title="Area 30097 Median Sale Price vs Homes Sold") + geom_smooth(method = "lm", se = FALSE)
+
+#cov(area30097Data$Homes.Sold, area30097Data$Median.Sale.Price, use="pairwise.complete.obs")
+
+ggplot(area30097Data, aes(New.Listings, Median.Sale.Price)) + geom_point() + labs(x = "New Listings", y = "Area 30097 Median Sale Price") + labs(title="Area 30097 Median Sale Price vs New Listings") + geom_smooth(method = "lm", se = FALSE)
+
+#cov(area30097Data$New.Listings, area30097Data$Median.Sale.Price, use="pairwise.complete.obs")
+
+ggplot(area30097Data, aes(pending_sales, Median.Sale.Price)) + geom_point() + labs(x = "Pending Sales", y = "Area 30097 Median Sale Price") + labs(title="Area 30097 Median Sale Price vs Pending Sales") + geom_smooth(method = "lm", se = FALSE)
+
+#cov(area30097Data$pending_sales, area30097Data$Median.Sale.Price, use="pairwise.complete.obs")
+
+ggplot(area30097Data, aes(Median.List.Price, Median.Sale.Price)) + geom_point() + labs(x = "List Price", y = "Area 30097 Median Sale Price") + labs(title="Area 30097 Median Sale Price vs Median List Price") + geom_smooth(method = "lm", se = FALSE)
+
+#cov(area30097Data$Median.List.Price, area30097Data$Median.Sale.Price, use="pairwise.complete.obs")
+
+
+```
+
+***
+
+####We have created Time Series Graphs below for the analysis of the variables.
+
+***
+
+####Median Sale Price Analysis
+
+The Median Sale Price is highest in the month of June, followed by May, July and then April.  The Median Sale Price is lowest in the month of November, followed by December and January.
+  
+```{r}
+
+#Median Sale Price Analysis
+ggplot(area30097Data) + geom_bar(aes(BeginMonthNum, Median.Sale.Price, fill=BeginYear), position="dodge", stat="summary", fun.y="mean") + xlab("MONTH") +
+  ylab("Median Sale Price") +  
+  labs(title = "Median Sale Price By Month",fill = "")
+
+ggplot(area30097Data) + geom_bar(aes(BeginMonthNum, Median.Sale.Price), position="dodge", stat="summary", fun.y="mean") + xlab("MONTH") +
+  ylab("Median Sale Price") +  
+  labs(title = "Median Sale Price By Month",fill = "")
+
+area30097Data %>% group_by(month=BeginMonthNum) %>%
+   summarize(Median.Sale.Price=mean(Median.Sale.Price))
+
+```
+***
+
+####Median List Price Analysis
+
+Median List Price is highest in March, followed by April and February.  It is lowest in November, followed by October and December.
+  
+```{r}
+
+#Median List Price Analysis
+ggplot(area30097Data) + geom_bar(aes(BeginMonthNum, Median.List.Price, fill=BeginYear), position="dodge", stat="summary", fun.y="mean") + xlab("MONTH") +
+  ylab("Median List Price") +  
+  labs(title = "Median List Price By Month",fill = "")
+
+ggplot(area30097Data) + geom_bar(aes(BeginMonthNum, Median.List.Price), position="dodge", stat="summary", fun.y="mean") + xlab("MONTH") +
+  ylab("Median List Price") +  
+  labs(title = "Median List Price By Month",fill = "")
+
+area30097Data %>% group_by(month=BeginMonthNum) %>%
+   summarize(Median.List.Pricee=mean(Median.List.Price))
+
+```
+***
+
+####Inventory Analysis
+
+Inventory is at the highest in April, followed by May and March.  Inventory is at the lowest in October.
+
+```{r}
+
+#Inventory Analysis
+ggplot(area30097Data) + geom_bar(aes(BeginMonthNum, Inventory, fill=BeginYear), position="dodge", stat="summary", fun.y="mean") + xlab("MONTH") +
+  ylab("Inventory") +  
+  labs(title = "Inventory By Month",fill = "")
+
+ggplot(area30097Data) + geom_bar(aes(BeginMonthNum, Inventory), position="dodge", stat="summary", fun.y="mean") + xlab("MONTH") +
+  ylab("Inventory") +  
+  labs(title = "Inventory By Month",fill = "")
+
+area30097Data %>% group_by(month=BeginMonthNum) %>%
+   summarize(Inventory=mean(Inventory))
+
+```
+
+***
+
+####Homes Sold Analysis
+
+Homes Sold is highest in the month of June, followed by May, July and then April.  Homes sold is lowest in the month of January, followed by December and November.
+  
+```{r}
+
+#Homes Sold Analysis
+ggplot(area30097Data) + geom_bar(aes(BeginMonthNum, Homes.Sold, fill=BeginYear), position="dodge", stat="summary", fun.y="mean") + xlab("MONTH") +
+  ylab("Homes Sold") +  
+  labs(title = "Homes Sold By Month",fill = "")
+
+ggplot(area30097Data) + geom_bar(aes(BeginMonthNum, Homes.Sold), position="dodge", stat="summary", fun.y="mean") + xlab("MONTH") +
+  ylab("Homes Sold") +  
+  labs(title = "Homes Sold By Month",fill = "")
+
+area30097Data %>% group_by(month=BeginMonthNum) %>%
+   summarize(Homes.Sold=mean(Homes.Sold))
+
+```
+***
+
+####Pending Sales Analysis
+
+Pending Sales is at the highest in April, followed by March and May.  Pending Sales is at the lowest in November.
+  
+```{r}
+
+#Pending Sales Analysis
+ggplot(area30097Data) + geom_bar(aes(BeginMonthNum, pending_sales, fill=BeginYear), position="dodge", stat="summary", fun.y="mean") + xlab("MONTH") +
+  ylab("Pending Sales") +  
+  labs(title = "Pending Sales By Month",fill = "")
+
+ggplot(area30097Data) + geom_bar(aes(BeginMonthNum, pending_sales), position="dodge", stat="summary", fun.y="mean") + xlab("MONTH") +
+  ylab("Pending Sales") +  
+  labs(title = "Pending Sales By Month",fill = "")
+
+area30097Data %>% group_by(month=BeginMonthNum) %>%
+   summarize(Pending.Sales=mean(pending_sales))
+
+```
+
+***
+
+####New Listings Analysis
+
+New Listings is at the highest in April, followed by March and May.  New Listings is at the lowest in November.
+
+```{r}
+#New Listings Analysis
+ggplot(area30097Data) + geom_bar(aes(BeginMonthNum, New.Listings, fill=BeginYear), position="dodge", stat="summary", fun.y="mean") + xlab("MONTH") +
+  ylab("New Listings") +  
+  labs(title = "New Listings By Month",fill = "")
+
+ggplot(area30097Data) + geom_bar(aes(BeginMonthNum, New.Listings), position="dodge", stat="summary", fun.y="mean") + xlab("MONTH") +
+  ylab("New Listings") +  
+  labs(title = "New Listings By Month",fill = "")
+
+area30097Data %>% group_by(month=BeginMonthNum) %>%
+   summarize(New.Listings=mean(New.Listings))
+
+
+#kable(area30097Data)
+#str(area30097Data)
+#View(redfin)
+
+```
+
+***
+
+####Interesting Insights and Implications to the Consumer (Target Audience) 
+
+Based on a Redfin article, it usually takes 50-60 days for a mortgage loan to close.  This could explain why certain variables such as Median List Price, Inventory, Pending Sales, and New Listings seem to be generally at the highest in the months of March, April, and May, while Median Sale Price and Homes Sold are the highest in June followed by May and July.
+
+The Redfin data supports the initial assumption that the best time to sell a home is in the Spring or Summer (March - August) in order to maximize the Sale Price.  It would be best to list a home in the Spring or even early Spring (February - April) and hope to complete the sale by Summer (May - July).
+
+Inventory is highest in April which could indicate home sellers taking advantage of potentially more buyers and possibly buyers willing to pay a premium for homes.  There seems to be a strong relationship between Inventory levels and the Sale Price with respect to the time of year.
+
+Unfortunately, the Redfin data does not include metrics on the amount of time closing took or how many offers were made and fell through to answer the question of whether the homeowner may also need to wait longer to sell to get top dollar.  Observations seem to indicate that if a seller waits too long and enters the months where activity is slow and variables are lowest, that the seller may need to wait until the more promising months cycle again.
+
+In comparing the months of different years, we see that the housing market has recovered very well since the housing crisis.  It is great to sell in 2018 compared to 2011 as Median Sale Price and Median List Price have increased significantly over the years since then.  There were high inventory levels in 2011 and 2012 possibly due to the lower demand for homes or higher foreclosures.
+
+
+***
+
+####Limitations of Analysis
+
+This analysis focused on the 30097-zip code for Duluth, GA, and neighboring zip codes. It would probably be good to compare each zip code for better insights or compare the area against the metrics for the entire state or maybe comparing different states.  I had planned to use a mapping library to associate the metrics with location but did not have the time, so that could be an improvement.  Additionally, other variables such as zip code median income, employment/unemployment, and other data could be other factors influencing home prices that could further be investigated.
+
+
+## References
+Field, A. et. al. Discovering Statistics Using R. 2012
+
+https://www.unitedstateszipcodes.org/30097/
+
+https://www.redfin.com/resources/how-long-does-it-take-to-buy-a-house
+
+https://stackoverflow.com/questions/15415021/i-have-time-series-data-how-i-can-do-monthly-report-and-average-for-a-variable
+
+https://ro-che.info/articles/2017-02-22-group_by_month_r
+
+
+
